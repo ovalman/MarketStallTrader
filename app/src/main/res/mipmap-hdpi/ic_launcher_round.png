@@ -1,0 +1,124 @@
+package uk.co.loomknitting.muxer;
+
+
+import android.app.ProgressDialog;
+import android.os.AsyncTask;
+import android.os.Bundle;
+import android.support.v7.app.AppCompatActivity;
+import android.util.Log;
+import android.widget.ListAdapter;
+import android.widget.ListView;
+import android.widget.SimpleAdapter;
+import android.widget.Toast;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+
+// Steps for creating
+//1. Create ListView and some test code to make sure it's working
+//2. Download json data and put into ListView
+//3. Change ListView into RecyclerView for smoother scrolling
+//4. Create an event Object according to json data
+//5. Make a call to the Json api and download the data in the background (10 events?)
+//6. Sort the Json data according to most recent
+//7. Break the Json data into arraylists and variables
+//8. Display the Objects into the RecyclerView so most recent are at the top.
+//9. Update a homescreen widget with the latest event.
+//10. tbd
+
+public class MainActivity extends AppCompatActivity {
+
+    private String TAG = MainActivity.class.getSimpleName();
+
+    private ProgressDialog pDialog;
+    private ListView lv;
+
+    // URL from the Muxer site
+
+    private static String url="https://www.googleapis.com/calendar/v3/calendars/farsetlabs.org.uk_srmqnkn373auq51u00s2nijrq8%40group.calendar.google.com/events?" +
+            "timeMin=2018-08-06T20%3A52%3A10.536127Z&maxResults=50&singleEvents=true&orderBy=startTime&key=AIzaSyAqmyUSbK13EX58WDExY9LN4VXZecI9wB8&alt=json";
+    ArrayList<HashMap<String, String>> contactList;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        contactList = new ArrayList<>();
+
+        lv = findViewById(R.id.list);
+
+        new GetContacts().execute();
+    }
+
+    /**
+     * Async task class to get json by making HTTP call
+     */
+    private class GetContacts extends AsyncTask<Void, Void, Void> {
+
+        @Override
+        protected void onPreExecute() {
+            super.onPreExecute();
+            // Showing progress dialog
+            // In future we will cache previous data and load this first then check the data against online to see if anything has changed
+            //If it has then we'll download the data and refresh the RecyclerView and Widget
+            pDialog = new ProgressDialog(MainActivity.this);
+            pDialog.setMessage("Please wait...");
+            pDialog.setCancelable(false);
+            pDialog.show();
+        }
+
+        @Override
+        protected Void doInBackground(Void... arg0) {
+            HttpHandler sh = new HttpHandler();
+
+            // Making a request to url and getting response
+            String jsonStr = sh.makeServiceCall(url);
+
+            Log.e(TAG, "Response from url: " + jsonStr);
+
+            if (jsonStr != null) {
+                try {
+                    JSONObject jsonObj = new JSONObject(jsonStr);
+
+                    // Getting JSON Array node
+                    JSONArray events = jsonObj.getJSONArray("items");
+
+                    // looping through All Contacts
+                    for (int i = 0; i < events.length(); i++) {
+                        JSONObject c = events.getJSONObject(i);
+
+                        String etag = c.getString("etag");
+                        String summary = c.getString("summary");
+                        String location = c.getString("location");
+
+                        JSONObject startTime = c.getJSONObject("start");
+                        String startDateTime = startTime.getString("dateTime");
+
+                        HashMap<String, String> event = new HashMap<>();
+
+                        // adding each child node to HashMap key => value
+                        event.put("etag", etag);
+                        event.put("summary", summary);
+                        event.put("location", location);
+                        event.put("datetime", startDateTime);
+                 //       contact.put("mobile", mobile);
+
+                        // adding contact to contact list
+                        contactList.add(event);
+                    }
+                } catch (final JSONException e) {
+                    Log.e(TAG, "Json parsing error: " + e.getMessage());
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            Toast.makeText(getApplicationContext(),
+                                    "Json parsing error: " + e.getMessage(),
+                                    Toast.LENGTH_LONG)
+                                    .show();
+                        }
+           
